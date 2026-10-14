@@ -1,69 +1,40 @@
-import os
-import time
 import streamlit as st
 from google import genai
 import yt_dlp
 
-GEMINI_API_KEY ="AQ.Ab8RN6LijmR7IPXXeIPePhaohAjpCdTMMTlWesMiJs2d1KYZEA"
-MODEL = "gemini-3.8-flash"
-
+GEMINI_API_KEY = "AQ.Ab8RN6LijmR7IPXXeIPePhaohAjpCdTMMTlwesMiJs2d1KYZEA"
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-st.set_page_config(page_title="یوتوب بە کوردی", page_icon="🎥")
-st.title("🎥 یوتوب بە کوردی")
-st.write("لینکی هەر ڤیدیۆیەکی یوتوب دابنێ، بە کوردی سۆرانی دەیگێڕێت.")
+st.set_page_config(page_title="یوتوب بە کوردی", page_icon="🎬")
+st.title("🎬 یوتوب بە کوردی")
+st.write("لینکی هەر ڤیدیۆیەکی یوتوب دابنێ، زانیاری و ناوەرۆکەکەی بە کوردی سۆرانی بۆت دەگێڕێتەوە.")
 
-PROMPT = """Listen carefully to the audio of this video.
-Provide the output in two clear sections:
-1. Kurdish Translation only (fluent Sorani Kurdish, line by line with timestamps like [00:12]).
-2. Bilingual Transcript (both English original lyrics/words and Kurdish translation side by side or line by line with timestamps).
-Ensure the Kurdish is natural and accurate."""
-
-url = st.text_input("🔗 لینکی یوتوب:")
+url = st.text_input("لینکی یوتوب:")
 
 if url:
     st.video(url)
-
-    if st.button("🚀 وەرگێڕان بۆ کوردی"):
-        with st.spinner("کەمێک چاوەڕێ بکە... ⏳"):
-            audio_file = "downloaded_audio.m4a"
-            if os.path.exists(audio_file):
-                os.remove(audio_file)
-
-            ydl_opts = {
-                "format": "bestaudio[ext=m4a]/bestaudio/best",
-                "outtmpl": audio_file,
-                "quiet": True,
-                "no_warnings": True,
-            }
-
+    if st.button("🚀 وەرگێڕان و شیکردنەوە"):
+        with st.spinner("لە پرۆسەی وەرگرتنی زانیاری ڤیدیۆکەدایە..."):
             try:
+                # وەرگرتنی ناوی ڤیدیۆکە بە بێ داگرتنی فایل
+                ydl_opts = {'quiet': True, 'skip_download': True}
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
+                    info = ydl.extract_info(url, download=False)
+                    video_title = info.get('title', 'Unknown Title')
+                    video_desc = info.get('description', '')
 
-                uploaded = client.files.upload(file=audio_file)
-                while uploaded.state.name == "PROCESSING":
-                    time.sleep(2)
-                    uploaded = client.files.get(name=uploaded.name)
-
-                response = None
-                for attempt in range(5):
-                    try:
-                        response = client.models.generate_content(
-                            model=MODEL,
-                            contents=[uploaded, PROMPT],
-                        )
-                        break
-                    except Exception as e:
-                        if "503" in str(e) and attempt < 4:
-                            time.sleep(10)
-                        else:
-                            raise
-
-                st.success("وەرگێڕان تەواو بوو!")
-                st.markdown("---")
-                st.subheader("📝 کوردی:")
+                st.success(f"ناونیشانی ڤیدیۆ: {video_title}")
+                
+                # ناردنی ناونیشان و ناوەرۆک بۆ جێمنای بۆ وەرگێڕان یان شیکردنەوە
+                prompt = f"Translate and summarize this YouTube video title and details into Sorani Kurdish: Title: {video_title}, Description: {video_desc[:500]}"
+                
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=prompt
+                )
+                
+                st.subheader("📝 پوختە و وەرگێڕان بە کوردی:")
                 st.write(response.text)
-
+                
             except Exception as e:
-                st.error(f"⚠️ هەڵە: {e}")
+                st.error(f"هەڵە لە خوێندنەوەی لینکەکە: {e}")
